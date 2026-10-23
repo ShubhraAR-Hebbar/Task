@@ -158,11 +158,13 @@ class RollingWindow:
         """
         cutoff = current_time - self.window_seconds
         while self.observations and self.observations[0].timestamp < cutoff:
-            expired = self.observations.popleft()
-            if self.max_deque and self.max_deque[0][0] <= expired.timestamp:
-                self.max_deque.popleft()
-            if self.min_deque and self.min_deque[0][0] <= expired.timestamp:
-                self.min_deque.popleft()
+            self.observations.popleft()
+
+        while self.max_deque and self.max_deque[0][0] < cutoff:
+            self.max_deque.popleft()
+
+        while self.min_deque and self.min_deque[0][0] < cutoff:
+            self.min_deque.popleft()
 
     def _handle_out_of_order(self, new_obs: Observation) -> WindowStats:
         """
@@ -176,6 +178,12 @@ class RollingWindow:
         if new_obs.timestamp < cutoff:
             # Observation is too stale; return current stats
             return self.latest_stats
+
+        # Check for duplicate observation in current window
+        for obs in self.observations:
+            if obs.timestamp == new_obs.timestamp and obs.buy == new_obs.buy and obs.sell == new_obs.sell:
+                # Idempotent skip for out-of-order duplicate
+                return self.latest_stats
 
         # Insert in sorted order
         # Since out-of-order updates are typically only slight network jitter,

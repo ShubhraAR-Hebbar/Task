@@ -25,7 +25,7 @@ COPY --from=builder /root/.local /home/appuser/.local
 # Copy application source code
 COPY app/ ./app/
 COPY scripts/ ./scripts/
-COPY .env.example .env
+COPY .env.example .env.example
 
 ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \

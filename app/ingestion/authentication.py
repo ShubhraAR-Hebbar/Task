@@ -68,13 +68,22 @@ class FeedAuthenticator:
             err_msg = parsed.get("error") or parsed.get("message")
             return False, f"Provider returned error: {err_msg}"
 
+        event = str(parsed.get("event", "")).lower()
+        if event in ("error", "failed", "unauthorized", "reject", "rejected"):
+            err_msg = parsed.get("message") or parsed.get("error") or "Authentication failed"
+            return False, f"Provider returned error event '{event}': {err_msg}"
+
         status = str(parsed.get("status", "")).lower()
         if status in ("error", "failed", "unauthorized", "rejected"):
             msg = parsed.get("message", "Authentication rejected")
-            return False, f"Provider rejected auth: {msg}"
+            return False, f"Provider rejected auth with status '{status}': {msg}"
 
         if parsed.get("authenticated") is False:
             return False, "Provider explicitly returned authenticated=false"
+
+        msg_text = str(parsed.get("message", "")).lower()
+        if any(term in msg_text for term in ("invalid credential", "unauthorized", "forbidden", "auth fail")):
+            return False, f"Provider rejected credentials: {parsed.get('message')}"
 
         code = parsed.get("code")
         if code is not None and str(code) not in ("200", "0", "1"):
@@ -84,13 +93,19 @@ class FeedAuthenticator:
         if status in ("success", "authenticated", "ok", "auth_ok", "authorized"):
             return True, f"Authentication succeeded with status: {status}"
 
+        if event in ("success", "authenticated", "auth_ok", "authorized"):
+            return True, f"Authentication succeeded with event: {event}"
+
         if parsed.get("authenticated") is True:
             return True, "Authentication confirmed (authenticated=true)"
 
         action = str(parsed.get("action", "")).lower()
-        if action == "auth" and status != "error":
+        if action == "auth" and status not in ("error", "failed") and event not in ("error", "failed"):
             return True, "Authentication confirmed via auth action response"
 
-        # If empty dict or ambiguous response without error
-        logger.warning(f"Unusual auth response from provider: {parsed}")
-        return True, "Auth response acknowledged without errors"
+        if event == "auth" and status not in ("error", "failed"):
+            return True, "Authentication confirmed via auth event response"
+
+        # If completely ambiguous or unrecognized without explicit success confirmation
+        logger.error(f"Unconfirmed auth response from provider: {parsed}")
+        return False, f"Provider returned unconfirmed response format: {parsed}"

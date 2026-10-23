@@ -204,6 +204,7 @@ class OutboundWebSocketServer:
             try:
                 # Evict oldest item to prevent memory bloat and prioritize latest prices
                 queue.get_nowait()
+                queue.task_done()
                 queue.put_nowait(payload)
                 return True
             except Exception:

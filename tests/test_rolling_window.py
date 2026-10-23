@@ -122,3 +122,33 @@ def test_stale_tick_rejection():
     # Should not contaminate high
     assert stats.high_24h == pytest.approx(10.0)
     assert stats.observation_count == 1
+
+
+def test_interspersed_out_of_order_and_duplicates():
+    """
+    Test a series of out-of-order and duplicate ticks interspersed together.
+    """
+    window = RollingWindow(window_seconds=100.0)
+    # Stream in order: t=10(50), t=30(70), t=50(60)
+    window.add_observation(10.0, 50.0, 50.0)
+    window.add_observation(30.0, 70.0, 70.0)
+    window.add_observation(50.0, 60.0, 60.0)
+
+    # Interspersed duplicate of t=30
+    window.add_observation(30.0, 70.0, 70.0)
+    assert len(window.observations) == 3
+
+    # Out of order: t=20 (80 - new high)
+    s1 = window.add_observation(20.0, 80.0, 80.0)
+    assert len(window.observations) == 4
+    assert s1.high_24h == pytest.approx(80.0)
+    assert s1.low_24h == pytest.approx(50.0)
+
+    # Out of order: t=40 (40 - new low)
+    s2 = window.add_observation(40.0, 40.0, 40.0)
+    assert len(window.observations) == 5
+    assert s2.high_24h == pytest.approx(80.0)
+    assert s2.low_24h == pytest.approx(40.0)
+    # Ref price is still t=10 (50.0). Latest price is t=50 (60.0) -> +20%
+    assert s2.change_24h == pytest.approx(20.0)
+

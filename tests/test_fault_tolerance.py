@@ -35,6 +35,7 @@ def test_auth_response_evaluations():
 
     # Failure scenarios
     assert auth.evaluate_auth_response({"error": "Invalid API key"})[0] is False
+    assert auth.evaluate_auth_response({"event": "error", "message": "invalid credentials"})[0] is False
     assert auth.evaluate_auth_response({"status": "unauthorized"})[0] is False
     assert auth.evaluate_auth_response({"authenticated": False})[0] is False
     assert auth.evaluate_auth_response({"status": "error", "message": "Bad token"})[0] is False
