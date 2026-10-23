@@ -1,0 +1,9 @@
+# Ignore backend Python application files from Vercel static build
+app/
+tests/
+scripts/
+requirements.txt
+Dockerfile
+docker-compose.yml
+pytest.ini
+.venv/

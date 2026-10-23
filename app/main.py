@@ -139,30 +139,50 @@ class PricingEngineApp:
 
 
 async def main() -> None:
-    app = PricingEngineApp()
+    engine_app = PricingEngineApp()
 
     # Register OS signal handlers for graceful shutdown (Unix/Windows compatible)
     loop = asyncio.get_running_loop()
 
     def shutdown_signal():
         logger.info("Received termination signal.")
-        asyncio.create_task(app.stop())
+        asyncio.create_task(engine_app.stop())
 
     if sys.platform != "win32":
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, shutdown_signal)
 
     try:
-        await app.start()
+        await engine_app.start()
         # Keep running until stop event is triggered
-        await app._stop_event.wait()
+        await engine_app._stop_event.wait()
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("Keyboard interrupt received.")
-        await app.stop()
+        await engine_app.stop()
     except Exception as e:
         logger.critical(f"Fatal application error: {e}", exc_info=True)
-        await app.stop()
+        await engine_app.stop()
         sys.exit(1)
+
+
+async def asgi_handler(scope, receive, send):
+    """ASGI entrypoint for serverless environments (e.g. Vercel)."""
+    if scope.get("type") == "http":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"application/json"],
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": b'{"status": "ok", "service": "real-time-pricing-engine", "version": "1.0.0"}',
+        })
+
+# Export top-level symbols expected by Vercel Python runtime
+app = asgi_handler
+handler = asgi_handler
 
 
 if __name__ == "__main__":
@@ -170,3 +190,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+
