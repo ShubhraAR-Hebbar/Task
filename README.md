@@ -27,39 +27,60 @@ The **Real-Time Pricing Engine** solves the critical challenges of processing hi
 
 ```mermaid
 flowchart TD
-    subgraph Upstream ["External Market Feed"]
-        EX_WS["wss://v3-prod.livefxhub.com/ws/algo"]
+    subgraph Upstream [External Market Feed]
+        EX_WS["External Feed: wss://v3-prod.livefxhub.com/ws/algo"]
     end
 
-    subgraph EngineCore ["Pricing Engine Application"]
-        INGEST["ExternalMarketFeed\n(Auth & Reconnect Backoff)"]
-        VAL["DataValidator\n(Normalizes types & timestamps)"]
-        PROC["MarketProcessor"]
-        
-        subgraph Windowing ["Rolling 24h Window (Per Symbol)"]
-            DEQUE["Monotonic Deques\nO(1) Rolling High / Low / Change%"]
-        end
-        
-        SRV["OutboundWebSocketServer\n(ws://0.0.0.0:8765)"]
-        SUB_MGR["SubscriptionManager\n(Symbol Filter & Slow-Client Protection)"]
+    subgraph Ingestion [Ingestion Layer]
+        CONN_MGR["ExternalMarketFeed<br/>Reconnect Backoff + Jitter"]
+        AUTH["FeedAuthenticator<br/>Auth Handshake"]
+        SUB_BUILDER["ExternalSubscriptionBuilder<br/>subscribeMarketPrice"]
+        VAL["DataValidator<br/>Type & Timestamp Normalization"]
     end
 
-    subgraph Storage ["Persistent State (Redis)"]
-        REDIS[("Redis ZSET & Hash\nAOF Everysec Persistence")]
+    subgraph Processing [Market Processing Core]
+        PROC["MarketProcessor<br/>State Coordinator"]
+        DEQUE["Dual Monotonic Deques<br/>O1 Rolling High / Low / Change %"]
     end
 
-    subgraph Downstream ["Client Applications"]
-        C1["Client A (EURUSD)"]
-        C2["Client B (BTCUSD, ETHUSD)"]
+    subgraph Storage [Persistence Layer]
+        STORE["RedisStore<br/>Non-blocking Write Buffer"]
+        REC["StateRecoveryManager<br/>Startup State Hydration"]
+        REDIS_ZSET[("Redis Sorted Set<br/>engine:history:SYMBOL")]
+        REDIS_HASH[("Redis Hash<br/>engine:latest:SYMBOL")]
     end
 
-    EX_WS <--> INGEST
-    INGEST --> VAL --> PROC --> Windowing
-    PROC -.->|Async Persist| REDIS
-    REDIS -.->|Startup Hydration| PROC
-    PROC --> SRV --> SUB_MGR
-    SUB_MGR --> C1
-    SUB_MGR --> C2
+    subgraph Distribution [Outbound Distribution]
+        WS_SRV["OutboundWebSocketServer<br/>ws://0.0.0.0:8765"]
+        SUB_MGR["SubscriptionManager<br/>Symbol Directory"]
+        OPTIMIZER["PayloadOptimizer<br/>JSON Serialization under 10 KB"]
+        CLIENT_QUEUE["Bounded Client Queues<br/>Slow-Client Protection"]
+    end
+
+    subgraph Clients [Downstream Clients]
+        C1["Client 1<br/>Subscribed: EURUSD"]
+        C2["Client 2<br/>Subscribed: BTCUSD, ETHUSD"]
+    end
+
+    EX_WS -->|Incoming Ticks| CONN_MGR
+    CONN_MGR -->|Auth & Subscriptions| EX_WS
+    CONN_MGR --> AUTH
+    AUTH --> SUB_BUILDER
+    CONN_MGR --> VAL
+    VAL --> PROC
+    PROC --> DEQUE
+    DEQUE --> PROC
+    PROC -.->|Async Write| STORE
+    STORE --> REDIS_ZSET
+    STORE --> REDIS_HASH
+    REC -.->|Startup Read| REDIS_ZSET
+    REC -.->|Hydrate State| PROC
+    PROC --> WS_SRV
+    WS_SRV --> SUB_MGR
+    SUB_MGR --> OPTIMIZER
+    OPTIMIZER --> CLIENT_QUEUE
+    CLIENT_QUEUE --> C1
+    CLIENT_QUEUE --> C2
 ```
 
 Detailed architectural diagrams and sequence flows are documented in [docs/architecture.md](file:///c:/Users/Shubhra/OneDrive/Desktop/task/docs/architecture.md).

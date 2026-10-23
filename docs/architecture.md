@@ -10,67 +10,65 @@ The **Real-Time Pricing Engine** is a high-throughput, low-latency market data p
 
 ```mermaid
 flowchart TD
-    subgraph Upstream ["External Provider (LiveFXHub Algo Feed)"]
-        EX_WS["wss://v3-prod.livefxhub.com/ws/algo"]
+    subgraph Upstream [External Provider: LiveFXHub]
+        EX_WS["External Feed: wss://v3-prod.livefxhub.com/ws/algo"]
     end
 
-    subgraph IngestionLayer ["Ingestion & Resilience Layer"]
-        AUTH["FeedAuthenticator\n(Validates Auth Handshake)"]
-        SUB_BUILDER["ExternalSubscriptionBuilder\n(action: subscribeMarketPrice)"]
-        CONN_MGR["ExternalMarketFeed\n(Exponential Backoff + Jitter)"]
+    subgraph IngestionLayer [Ingestion & Resilience Layer]
+        CONN_MGR["ExternalMarketFeed<br/>Reconnect Backoff + Jitter"]
+        AUTH["FeedAuthenticator<br/>Auth Handshake"]
+        SUB_BUILDER["ExternalSubscriptionBuilder<br/>subscribeMarketPrice"]
+        VAL["DataValidator<br/>Type & Timestamp Normalization"]
     end
 
-    subgraph ProcessingPipeline ["Market Data Processing Core"]
-        VAL["DataValidator\n(Normalizes types, timestamps & ignores external 24h stats)"]
-        PROC["MarketProcessor\n(Orchestration & delta detection)"]
-        
-        subgraph WindowModule ["Rolling 24h Window (Per Symbol)"]
-            OBS_DEQUE["observations deque\n(Chronological observations)"]
-            MAX_DEQUE["max_deque\n(Monotonic Decreasing: O(1) High)"]
-            MIN_DEQUE["min_deque\n(Monotonic Increasing: O(1) Low)"]
-            CALC["Stats Computation\n(High, Low, Change %)"]
-        end
+    subgraph ProcessingPipeline [Market Processing Core]
+        PROC["MarketProcessor<br/>State Coordinator"]
+        OBS_DEQUE["observations deque<br/>Chronological Observations"]
+        MAX_DEQUE["max_deque<br/>Monotonic Decreasing: O1 High"]
+        MIN_DEQUE["min_deque<br/>Monotonic Increasing: O1 Low"]
+        CALC["Stats Computation<br/>High, Low, Change %"]
     end
 
-    subgraph PersistenceLayer ["Persistence & Recovery (Redis)"]
-        STORE["RedisStore\n(Non-blocking Write Queue)"]
-        REC["StateRecoveryManager\n(Replays 24h history on startup)"]
-        REDIS_ZSET[("Redis ZSET\nengine:history:SYMBOL\nscore=timestamp")]
-        REDIS_HASH[("Redis Hash\nengine:latest:SYMBOL")]
+    subgraph PersistenceLayer [Persistence & Recovery Layer]
+        STORE["RedisStore<br/>Non-blocking Write Buffer"]
+        REC["StateRecoveryManager<br/>Startup State Hydration"]
+        REDIS_ZSET[("Redis Sorted Set<br/>engine:history:SYMBOL")]
+        REDIS_HASH[("Redis Hash<br/>engine:latest:SYMBOL")]
     end
 
-    subgraph DistributionLayer ["Outbound Distribution Server"]
-        WS_SRV["OutboundWebSocketServer\n(ws://0.0.0.0:8765)"]
-        SUB_MGR["SubscriptionManager\n(Client-to-Symbol Index)"]
-        OPTIMIZER["PayloadOptimizer\n(Precision Rounding, <10KB)"]
-        CLIENT_QUEUE["Per-Client Bounded Queues\n(Slow-Client Protection)"]
+    subgraph DistributionLayer [Outbound Distribution Server]
+        WS_SRV["OutboundWebSocketServer<br/>ws://0.0.0.0:8765"]
+        SUB_MGR["SubscriptionManager<br/>Symbol Directory"]
+        OPTIMIZER["PayloadOptimizer<br/>JSON Serialization under 10 KB"]
+        CLIENT_QUEUE["Bounded Client Queues<br/>Slow-Client Protection"]
     end
 
-    subgraph Clients ["Downstream WebSocket Clients"]
-        C1["Client 1\n(Subscribed: EURUSD)"]
-        C2["Client 2\n(Subscribed: BTCUSD, ETHUSD)"]
+    subgraph Clients [Downstream WebSocket Clients]
+        C1["Client 1<br/>Subscribed: EURUSD"]
+        C2["Client 2<br/>Subscribed: BTCUSD, ETHUSD"]
         C3["Client N..."]
     end
 
-    %% Flow connections
-    EX_WS <-->|Auth & Market Ticks| CONN_MGR
+    EX_WS -->|Incoming Ticks| CONN_MGR
+    CONN_MGR -->|Auth & Subscriptions| EX_WS
     CONN_MGR --> AUTH
     AUTH --> SUB_BUILDER
-    CONN_MGR -->|Raw Message| VAL
-    VAL -->|RawTick| PROC
-    PROC --> WindowModule
-    WindowModule --> CALC
-    CALC -->|ProcessedMarketData| PROC
+    CONN_MGR --> VAL
+    VAL --> PROC
+    PROC --> OBS_DEQUE
+    OBS_DEQUE --> MAX_DEQUE
+    OBS_DEQUE --> MIN_DEQUE
+    MAX_DEQUE --> CALC
+    MIN_DEQUE --> CALC
+    CALC --> PROC
     
-    %% Storage Path
-    PROC -.->|Async Persist| STORE
+    PROC -.->|Async Write| STORE
     STORE --> REDIS_ZSET
     STORE --> REDIS_HASH
-    REC -.->|Startup Hydration| REDIS_ZSET
-    REC -.->|Replay History| PROC
+    REC -.->|Startup Read| REDIS_ZSET
+    REC -.->|Hydrate State| PROC
 
-    %% Distribution Path
-    PROC -->|Calculated Tick| WS_SRV
+    PROC --> WS_SRV
     WS_SRV --> SUB_MGR
     SUB_MGR --> OPTIMIZER
     OPTIMIZER --> CLIENT_QUEUE
