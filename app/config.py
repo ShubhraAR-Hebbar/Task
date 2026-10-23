@@ -1,10 +1,5 @@
-"""
-Configuration management using pydantic-settings.
-Loads configuration from environment variables and .env file.
-"""
-
 from typing import Any, List, Union
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,12 +22,12 @@ class Settings(BaseSettings):
     )
     api_key: str = Field(
         default="",
-        alias="API_KEY",
+        validation_alias=AliasChoices("API_KEY", "api_key"),
         description="Public API key for external provider",
     )
     api_secret: str = Field(
         default="",
-        alias="API_SECRET",
+        validation_alias=AliasChoices("SECRET_KEY", "API_SECRET", "secret_key", "api_secret"),
         description="Secret key for external provider authentication",
     )
     subscribe_symbols: Union[List[str], str] = Field(

@@ -32,10 +32,13 @@ services:
     container_name: pricing_engine_core
     ports:
       - "8765:8765"
+    env_file:
+      - .env
     environment:
       - EXTERNAL_WS_URL=${EXTERNAL_WS_URL:-wss://v3-prod.livefxhub.com/ws/algo}
       - API_KEY=${API_KEY:-}
-      - API_SECRET=${API_SECRET:-}
+      - API_SECRET=${API_SECRET:-${SECRET_KEY:-}}
+      - SECRET_KEY=${SECRET_KEY:-${API_SECRET:-}}
       - SUBSCRIBE_SYMBOLS=${SUBSCRIBE_SYMBOLS:-EURUSD,GBPUSD,USDJPY,BTCUSD,ETHUSD}
       - OUTBOUND_WS_HOST=0.0.0.0
       - OUTBOUND_WS_PORT=8765
