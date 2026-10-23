@@ -57,3 +57,7 @@ Thumbs.db
 dump.rdb
 appendonly.aof
 data/
+
+# Vercel
+.vercel/
+

@@ -7,6 +7,7 @@ Production-grade, low-latency market data processing engine engineered in Python
 [![Throughput](https://img.shields.io/badge/throughput-136k%20ticks%2Fsec-success.svg)]()
 [![Latency](https://img.shields.io/badge/P99%20latency-0.0195%20ms-brightgreen.svg)]()
 [![Outbound Payload](https://img.shields.io/badge/outbound%20payload-164%20bytes%20(<10KB)-blue.svg)]()
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FShubhraAR-Hebbar%2FTask)
 
 ---
 
@@ -506,3 +507,28 @@ pytest -v
 1. **Binary Protobuf / FlatBuffers Serializer**: Optional binary protocol support alongside JSON for institutional clients requiring sub-50 byte payloads.
 2. **Clustered Distribution**: Integrate Redis Pub/Sub or Kafka to distribute processed ticks across a cluster of outbound WebSocket gateway nodes.
 3. **WebRTC DataChannels**: Ultra-low latency UDP transport for browser-based algorithmic trading terminals.
+
+---
+
+## 21. Live Web Dashboard & Vercel Hosting
+
+The project includes a glassmorphic trading terminal with real-time price flashes, SVG sparklines, and a live waterfall tape.
+
+### Option A: 1-Click Deploy to Vercel (Instant Cloud Hosting)
+Click the button below to deploy the dashboard instantly to Vercel with zero configuration:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FShubhraAR-Hebbar%2FTask)
+
+Alternatively:
+1. Log in to [Vercel](https://vercel.com).
+2. Click **Add New...** -> **Project**.
+3. Import the GitHub repository: `https://github.com/ShubhraAR-Hebbar/Task`.
+4. Click **Deploy**. Vercel will automatically detect `vercel.json` and `index.html` and deploy your live `https://<project-name>.vercel.app` dashboard link.
+
+### Option B: Local Flow Runner
+To run the full stack (Mock Feed + Pricing Engine + Local Dashboard UI) locally in one click:
+```bash
+python scripts/run_dashboard_flow.py
+```
+Open [http://localhost:8080](http://localhost:8080) to inspect real-time market data streaming over WebSocket (`ws://localhost:8765`).
+
