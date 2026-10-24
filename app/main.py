@@ -183,6 +183,7 @@ async def asgi_handler(scope, receive, send):
 # Export top-level symbols expected by Vercel Python runtime
 app = asgi_handler
 handler = asgi_handler
+application = asgi_handler
 
 
 if __name__ == "__main__":
